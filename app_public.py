@@ -62,7 +62,7 @@ def analyze():
     sorted_unique_citations = get_unique_citations(sentence_info)
     
     return jsonify({
-        'sentences': sentence_info,
+        'sentence_analysis': sentence_info,  # Changed from 'sentences' to 'sentence_analysis' to match frontend expectations
         'citation_count': citation_count,
         'total_sentences': total_sentences,
         'citation_percentage': round(citation_percentage, 1),
