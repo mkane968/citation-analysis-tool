@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Citation Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #2c536e;
+            --secondary-color: #3c7ba8;
+            --accent-color: #e74c3c;
+            --background-color: #f5f5f5;
+            --card-color: #ffffff;
+            --text-color: #333333;
+            --border-radius: 10px;
+            --spacing: 30px;
+            --citation-color: #2196f3;
+            --no-citation-color: #9e9e9e;
+            --reporting-color: #4caf50;
+            --transforming-color: #ff9800;
+            --evaluating-color: #9c27b0;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--background-color);
+            margin: 0;
+            padding: 0;
+            color: var(--text-color);
+            line-height: 1.6;
+            font-size: 18px; /* Increased base font size */
+        }
+
+        .header {
+            background-color: #1a4971;
+            padding: 40px;
+            color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            margin-bottom: 50px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 3rem; /* Much larger title */
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .main-container {
+            max-width: 1800px; /* Larger container */
+            width: 95%;
+            margin: 0 auto;
+            padding: 0 var(--spacing);
+        }
+
+        .result-card {
+            background-color: var(--card-color);
+            margin: 25px 0;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 8px solid #ccc;
+            font-size: 1.2rem;
+        }
+
+        .result-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+        }
+
+        .has-citation {
+            background-color: rgba(33, 150, 243, 0.1);
+            border-left-color: var(--citation-color);
+        }
+
+        .no-citation {
+            background-color: var(--card-color);
+            border-left-color: var(--no-citation-color);
+        }
+
+        .reporting-move {
+            border-top: 4px solid var(--reporting-color);
+        }
+
+        .transforming-move {
+            border-top: 4px solid var(--transforming-color);
+        }
+
+        .evaluating-move {
+            border-top: 4px solid var(--evaluating-color);
+        }
+
+        .confidence-bar {
+            height: 12px;
+            background-color: var(--secondary-color);
+            margin-top: 15px;
+            border-radius: 6px;
+        }
+
+        .form-control {
+            border-radius: var(--border-radius);
+            border: 1px solid #ddd;
+            padding: 20px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+            font-size: 1.2rem;
+        }
+
+        .form-control:focus {
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 0.25rem rgba(60, 123, 168, 0.25);
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.2rem;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .summary-box {
+            background-color: rgba(60, 123, 168, 0.1);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            margin-bottom: 40px;
+            border-left: 8px solid var(--secondary-color);
+        }
+
+        .section-title {
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            font-weight: 700;
+            font-size: 2.2rem;
+        }
+
+        .citation-info {
+            background-color: rgba(33, 150, 243, 0.05);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        /* Added styles for input card */
+        .input-card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+            padding: 35px;
+            margin-bottom: 30px;
+        }
+
+        /* Stats cards */
+        .stats-card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 25px 15px;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+
+        .stats-card h4 {
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .stats-card .number {
+            font-size: 2.8rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            line-height: 1.2;
+        }
+
+        .stats-card .percentage {
+            font-size: 1.2rem;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .reporting-stats {
+            border-top: 5px solid var(--reporting-color);
+        }
+
+        .transforming-stats {
+            border-top: 5px solid var(--transforming-color);
+        }
+
+        .evaluating-stats {
+            border-top: 5px solid var(--evaluating-color);
+        }
+
+        .citation-stats {
+            border-top: 5px solid var(--citation-color);
+        }
+
+        /* Move badge */
+        .move-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            margin-right: 10px;
+        }
+
+        .reporting-badge {
+            background-color: var(--reporting-color);
+        }
+
+        .transforming-badge {
+            background-color: var(--transforming-color);
+        }
+
+        .evaluating-badge {
+            background-color: var(--evaluating-color);
+        }
+
+        /* Chart styles */
+        .chart-container {
+            height: 300px;
+            margin: 30px 0;
+            position: relative;
+            padding-bottom: 50px;
+            padding-top: 30px;
+        }
+
+        .chart-bar {
+            display: inline-block;
+            width: 28%;
+            margin: 0 2.5%;
+            position: relative;
+            height: 100%;
+            background-color: #f0f0f0;
+            border-radius: 8px;
+            overflow: visible;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .chart-fill {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            transition: height 1s ease-in-out;
+            border-radius: 0 0 8px 8px;
+            min-height: 30px; /* Ensure there's always a visible bar */
+        }
+
+        .chart-label {
+            position: absolute;
+            bottom: -40px;
+            width: 100%;
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+        }
+
+        .chart-value {
+            position: absolute;
+            top: -40px;
+            width: 100%;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.4rem;
+            color: #333;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Citation and Rhetorical Move Analysis Tool</h1>
+    </div>
+
+    <div class="main-container">
+        <div class="row">
+            <div class="col-md-5">
+                <div class="input-card">
+                    <h3 class="section-title">Enter your text</h3>
+                    <div class="form-group">
+                        <textarea class="form-control" id="textInput" rows="18" placeholder="Paste your text here..."></textarea>
+                    </div>
+                    <button class="btn btn-primary mt-5 py-3 px-5" onclick="analyzeText()">
+                        <i class="fas fa-search me-2"></i> Analyze Text
+                    </button>
+                </div>
+            </div>
+            
+            <div class="col-md-7">
+                <h3 class="section-title">Analysis Results</h3>
+                <div id="results" class="pe-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function analyzeText() {
+            const text = document.getElementById('textInput').value;
+            if (!text.trim()) {
+                alert('Please enter some text to analyze');
+                return;
+            }
+
+            // Show loading indicator
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div><p class="mt-3" style="font-size: 1.3rem;">Analyzing your text...</p></div>';
+            
+            fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                resultsDiv.innerHTML = '';
+                
+                // Add summary of citations and rhetorical moves
+                const summaryDiv = document.createElement('div');
+                summaryDiv.className = 'summary-box';
+                summaryDiv.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-info-circle me-4" style="font-size: 2.5rem; color: var(--secondary-color);"></i>
+                        <div>
+                            <h4 class="mb-2" style="font-size: 1.8rem;">Analysis Summary</h4>
+                            <p class="mb-0" style="font-size: 1.4rem;"><strong>Total Citations Found:</strong> ${data.citation_count}</p>
+                        </div>
+                    </div>
+                `;
+                resultsDiv.appendChild(summaryDiv);
+                
+                // Add rhetorical move statistics
+                if (data.rhetorical_move_stats) {
+                    const statsRow = document.createElement('div');
+                    statsRow.className = 'row mb-5';
+                    
+                    // Citation stats
+                    statsRow.innerHTML = `
+                        <div class="col-lg-3 col-md-6 mb-4">
+                            <div class="stats-card citation-stats">
+                                <h4>Citations</h4>
+                                <div class="number">${data.citation_count}</div>
+                                <div class="percentage">Total</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6 mb-4">
+                            <div class="stats-card reporting-stats">
+                                <h4>Reporting</h4>
+                                <div class="number">${data.rhetorical_move_stats.counts.Reporting}</div>
+                                <div class="percentage">${data.rhetorical_move_stats.percentages.Reporting}%</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6 mb-4">
+                            <div class="stats-card transforming-stats">
+                                <h4>Transforming</h4>
+                                <div class="number">${data.rhetorical_move_stats.counts.Transforming}</div>
+                                <div class="percentage">${data.rhetorical_move_stats.percentages.Transforming}%</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6 mb-4">
+                            <div class="stats-card evaluating-stats">
+                                <h4>Evaluating</h4>
+                                <div class="number">${data.rhetorical_move_stats.counts.Evaluating}</div>
+                                <div class="percentage">${data.rhetorical_move_stats.percentages.Evaluating}%</div>
+                            </div>
+                        </div>
+                    `;
+                    resultsDiv.appendChild(statsRow);
+                    
+                    // Add chart
+                    const chartDiv = document.createElement('div');
+                    chartDiv.className = 'card p-4 mb-5';
+                    
+                    // Calculate display heights for the chart (minimum 10% for visibility)
+                    const reportingHeight = Math.max(data.rhetorical_move_stats.percentages.Reporting, 5);
+                    const transformingHeight = Math.max(data.rhetorical_move_stats.percentages.Transforming, 5);
+                    const evaluatingHeight = Math.max(data.rhetorical_move_stats.percentages.Evaluating, 5);
+                    
+                    chartDiv.innerHTML = `
+                        <h4 class="mb-4 text-center" style="font-size: 1.6rem; color: var(--primary-color);">Rhetorical Move Distribution</h4>
+                        <div class="chart-container">
+                            <div class="chart-bar">
+                                <div class="chart-value">${data.rhetorical_move_stats.percentages.Reporting}%</div>
+                                <div class="chart-fill" style="height: ${reportingHeight}%; background-color: var(--reporting-color);"></div>
+                                <div class="chart-label">Reporting</div>
+                            </div>
+                            <div class="chart-bar">
+                                <div class="chart-value">${data.rhetorical_move_stats.percentages.Transforming}%</div>
+                                <div class="chart-fill" style="height: ${transformingHeight}%; background-color: var(--transforming-color);"></div>
+                                <div class="chart-label">Transforming</div>
+                            </div>
+                            <div class="chart-bar">
+                                <div class="chart-value">${data.rhetorical_move_stats.percentages.Evaluating}%</div>
+                                <div class="chart-fill" style="height: ${evaluatingHeight}%; background-color: var(--evaluating-color);"></div>
+                                <div class="chart-label">Evaluating</div>
+                            </div>
+                        </div>
+                    `;
+                    resultsDiv.appendChild(chartDiv);
+                }
+                
+                // Process each sentence analysis
+                data.sentence_analysis.forEach(result => {
+                    // Determine rhetorical move class
+                    let moveClass = '';
+                    if (result.rhetorical_move === 'Reporting') {
+                        moveClass = 'reporting-move';
+                    } else if (result.rhetorical_move === 'Transforming') {
+                        moveClass = 'transforming-move';
+                    } else if (result.rhetorical_move === 'Evaluating') {
+                        moveClass = 'evaluating-move';
+                    }
+                    
+                    const card = document.createElement('div');
+                    card.className = `result-card ${result.has_citation ? 'has-citation' : 'no-citation'} ${moveClass}`;
+                    
+                    let citationInfo = '';
+                    if (result.has_citation && result.citations && result.citations.length > 0) {
+                        citationInfo = `
+                            <div class="citation-info mt-3 p-3">
+                                <p class="mb-2" style="font-size: 1.2rem;"><i class="fas fa-quote-right me-2"></i><strong>Citations (${result.citation_count}):</strong></p>
+                                <p class="mb-0" style="font-size: 1.15rem;">${result.citations.join(', ')}</p>
+                            </div>
+                        `;
+                    }
+                    
+                    const confidencePercentage = (result.confidence * 100).toFixed(1);
+                    const confidenceColor = confidencePercentage > 80 ? 'var(--secondary-color)' : 
+                                          confidencePercentage > 50 ? '#ffc107' : '#dc3545';
+                    
+                    // Create move badge
+                    let moveBadge = '';
+                    if (result.rhetorical_move === 'Reporting') {
+                        moveBadge = `<span class="move-badge reporting-badge">Reporting</span>`;
+                    } else if (result.rhetorical_move === 'Transforming') {
+                        moveBadge = `<span class="move-badge transforming-badge">Transforming</span>`;
+                    } else if (result.rhetorical_move === 'Evaluating') {
+                        moveBadge = `<span class="move-badge evaluating-badge">Evaluating</span>`;
+                    }
+                    
+                    card.innerHTML = `
+                        <div class="mb-4">
+                            <h5 class="mb-3" style="font-size: 1.5rem;">Sentence</h5>
+                            <p class="mb-0" style="font-size: 1.25rem;">${result.sentence}</p>
+                        </div>
+                        <div class="mb-4">
+                            <h5 class="mb-3" style="font-size: 1.5rem;">Rhetorical Move</h5>
+                            <div>${moveBadge} ${result.rhetorical_move}</div>
+                        </div>
+                        ${citationInfo}
+                        <div class="mt-4">
+                            <h5 class="mb-3" style="font-size: 1.5rem;">Citation Style</h5>
+                            <p class="mb-0" style="font-size: 1.25rem;">${result.citation_style || 'None detected'}</p>
+                        </div>
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span style="font-size: 1.3rem;">Confidence</span>
+                                <span style="font-size: 1.3rem; font-weight: 600;">${confidencePercentage}%</span>
+                            </div>
+                            <div class="confidence-bar" style="width: ${result.confidence * 100}%; background-color: ${confidenceColor};"></div>
+                        </div>
+                    `;
+                    resultsDiv.appendChild(card);
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-danger p-4">
+                        <i class="fas fa-exclamation-triangle me-3" style="font-size: 1.5rem;"></i>
+                        <span style="font-size: 1.3rem;">Error analyzing text: ${error.message}</span>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
