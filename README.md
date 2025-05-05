@@ -1,4 +1,4 @@
-# Citation Analysis Tool
+# Source Mapper
 
 A web application that analyzes academic text for citations and rhetorical moves. This tool helps researchers and students understand how sources are used in academic writing.
 
@@ -18,19 +18,39 @@ A web application that analyzes academic text for citations and rhetorical moves
 
 ## Installation
 
-1. Clone this repository
+1. Clone this repository:
+   ```
+   git clone https://github.com/mkane968/citation-analysis-tool.git
+   cd citation-analysis-tool
+   ```
+
 2. Create a virtual environment:
    ```
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
+
 3. Install dependencies:
    ```
    pip install -r requirements.txt
    ```
-4. Run the application:
+   This will install all required packages including Flask, NLTK, and scikit-learn.
+
+4. Download NLTK data (first time only):
+   ```python
+   python -c "import nltk; nltk.download('punkt')"
    ```
-   python app.py
+
+5. Run the application:
+   ```
+   python app_public.py  # Use this for the version without ML models
+   # OR
+   python app.py         # Use this if you have the ML models
+   ```
+
+6. Open your browser and go to:
+   ```
+   http://127.0.0.1:5000/
    ```
 
 ## Usage
@@ -42,7 +62,7 @@ A web application that analyzes academic text for citations and rhetorical moves
 
 ## Note on Machine Learning Models
 
-The machine learning models used for rhetorical move classification are not included in this repository. The application will fall back to rule-based classification if the models are not available.
+The machine learning models used for rhetorical move classification are not included in this repository. The application will fall back to rule-based classification if the models are not available. Email me at megan.kane@shu.edu if you would like more information about working with these models.
 
 ## Contributing
 
