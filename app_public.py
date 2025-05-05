@@ -124,7 +124,7 @@ def process_text(text):
         
         # Add sentence info to the list
         sentence_info.append({
-            'text': sentence,
+            'sentence': sentence,  # Changed from 'text' to 'sentence' to match frontend expectations
             'has_citation': has_citation,
             'citations': citations,
             'rhetorical_move': rhetorical_move.lower(),
