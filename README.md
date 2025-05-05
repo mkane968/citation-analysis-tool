@@ -30,25 +30,22 @@ A web application that analyzes academic text for citations and rhetorical moves
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. Install dependencies:
+3. Run the setup script (installs all dependencies and downloads required data):
    ```
-   pip install -r requirements.txt
+   python setup.py
    ```
-   This will install all required packages including Flask, NLTK, and scikit-learn.
+   This will automatically:
+   - Install all required packages (Flask, NLTK, scikit-learn, etc.)
+   - Download necessary NLTK data
 
-4. Download NLTK data (first time only):
-   ```python
-   python -c "import nltk; nltk.download('punkt')"
-   ```
-
-5. Run the application:
+4. Run the application:
    ```
    python app_public.py  # Use this for the version without ML models
    # OR
    python app.py         # Use this if you have the ML models
    ```
 
-6. Open your browser and go to:
+5. Open your browser and go to:
    ```
    http://127.0.0.1:5000/
    ```
