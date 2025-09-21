@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, after_this_request, send_from_directory
+from flask import Flask, render_template, request, jsonify, after_this_request, send_from_directory, send_file, session, make_response
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -7,12 +7,17 @@ import re
 import os
 import tempfile
 import PyPDF2
-import docx
-from flask import Flask, render_template, request, jsonify, after_this_request
+from docx import Document
+import io
 from werkzeug.utils import secure_filename
-from rhetorical_move_classifier import RhetoricalMoveClassifier
+from scibert_rhetorical_classifier import RhetoricalMoveClassifier
+import pdfkit
+import uuid
+import json
+from datetime import datetime
 
 app = Flask(__name__, static_url_path='/static', static_folder='static')
+app.secret_key = 'citation_analysis_secret_key'
 
 # Initialize the rhetorical move classifier
 rhetorical_classifier = RhetoricalMoveClassifier()
@@ -245,7 +250,7 @@ def identify_citations(s, author_names=None):
                 else:
                     # If no clear author, use a minimal representation
                     citations.append({
-                        'text': "[Source]",
+                        'text': "Implicit Citation",
                         'style': 'Implicit'
                     })
                 rhetorical_move_type = 'Evaluating'
@@ -259,13 +264,13 @@ def identify_citations(s, author_names=None):
                 author_match = re.search(r'(their|his|her|its)\s+(?:findings|research|study)', s, re.IGNORECASE)
                 if author_match:
                     citations.append({
-                        'text': "[Previous Source]",
+                        'text': "Implicit Citation",
                         'style': 'Implicit'
                     })
                 else:
                     # If no clear reference, use a minimal representation
                     citations.append({
-                        'text': "[Source]",
+                        'text': "Implicit Citation",
                         'style': 'Implicit'
                     })
                 rhetorical_move_type = 'Transforming'
@@ -648,6 +653,11 @@ def analyze_rhetorical_moves(sentence_info):
     # FIRST: Use the ML classifier to predict the rhetorical move for sentences with citations
     rhetorical_move, confidence = rhetorical_classifier.predict_rhetorical_move(sentence)
     
+    # If the classifier predicts "None" but we have citations, force it to choose among the 3 rhetorical moves
+    if rhetorical_move == "None" and sentence_info.get('has_citation', False):
+        # Get the probabilities for the 3 rhetorical moves (excluding None)
+        rhetorical_move, confidence = rhetorical_classifier.predict_rhetorical_move_no_none(sentence)
+    
     # Check for very clear reporting patterns regardless of ML confidence
     reporting_patterns = [
         # With quotes
@@ -756,6 +766,155 @@ def analyze():
         })
     
     return process_text(text)
+
+
+@app.route('/upload_file', methods=['POST'])
+def upload_file():
+    """Upload a file and extract its text content"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'})
+    
+    # Check file extension
+    allowed_extensions = {'txt', 'docx', 'pdf'}
+    file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+    
+    if file_ext not in allowed_extensions:
+        return jsonify({'error': f'File type not supported. Please upload a {", ".join(allowed_extensions)} file'})
+    
+    try:
+        # Extract text based on file type
+        if file_ext == 'txt':
+            # For text files, read directly
+            text = file.read().decode('utf-8')
+        elif file_ext == 'docx':
+            # For DOCX files, use python-docx
+            doc = Document(io.BytesIO(file.read()))
+            text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+        elif file_ext == 'pdf':
+            # For PDF files, use PyPDF2
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+            text = '\n'.join([page.extract_text() for page in pdf_reader.pages])
+        
+        return jsonify({'text': text})
+    except Exception as e:
+        return jsonify({'error': f'Error extracting text: {str(e)}'})
+
+
+@app.route('/upload', methods=['GET'])
+def upload_page():
+    """Serve the upload and analyze page"""
+    return render_template('upload_and_analyze.html')
+
+
+@app.route('/upload_and_analyze', methods=['POST'])
+def upload_and_analyze():
+    """Upload a document, analyze it, and provide download options"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'})
+    
+    # Create a temporary file to store the uploaded file
+    with tempfile.NamedTemporaryFile(delete=False) as temp:
+        file.save(temp.name)
+        filename = secure_filename(file.filename)
+        text = extract_text_from_file(temp.name, filename)
+        # Delete the temporary file
+        os.unlink(temp.name)
+    
+    if not text.strip():
+        return jsonify({'error': 'Could not extract text from the file'})
+    
+    # Process the text and get analysis results
+    analysis_result = process_text(text)
+    
+    # Store the analysis result in a session variable for download later
+    analysis_data = json.loads(analysis_result.get_data(as_text=True))
+    session['last_analysis'] = analysis_data
+    session['analyzed_text'] = text
+    session['analyzed_filename'] = filename
+    
+    return analysis_result
+
+
+@app.route('/download_analysis_html', methods=['GET'])
+def download_analysis_html():
+    """Download the analysis results as an HTML file"""
+    if 'last_analysis' not in session or 'analyzed_filename' not in session:
+        return jsonify({'error': 'No analysis results available for download'})
+    
+    analysis_data = session['last_analysis']
+    filename = session['analyzed_filename']
+    analyzed_text = session['analyzed_text']
+    
+    # Generate a formatted HTML document with the analysis results
+    html_content = generate_analysis_html(analysis_data, analyzed_text, filename)
+    
+    # Create response with HTML content
+    response = make_response(html_content)
+    response.headers["Content-Type"] = "text/html"
+    response.headers["Content-Disposition"] = f"attachment; filename=analysis_{os.path.splitext(filename)[0]}.html"
+    
+    return response
+
+
+@app.route('/download_analysis_pdf', methods=['GET'])
+def download_analysis_pdf():
+    """Download the analysis results as a PDF file"""
+    if 'last_analysis' not in session or 'analyzed_filename' not in session:
+        return jsonify({'error': 'No analysis results available for download'})
+    
+    analysis_data = session['last_analysis']
+    filename = session['analyzed_filename']
+    analyzed_text = session['analyzed_text']
+    
+    # Generate a formatted HTML document with the analysis results
+    html_content = generate_analysis_html(analysis_data, analyzed_text, filename)
+    
+    try:
+        # Check if wkhtmltopdf is installed
+        import shutil
+        wkhtmltopdf_installed = shutil.which('wkhtmltopdf') is not None
+        
+        if wkhtmltopdf_installed:
+            # Create a temporary file for the PDF
+            temp_pdf_path = os.path.join(tempfile.gettempdir(), f"analysis_{uuid.uuid4().hex}.pdf")
+            
+            # Convert HTML to PDF
+            pdfkit.from_string(html_content, temp_pdf_path)
+            
+            # Send the PDF file
+            return send_file(
+                temp_pdf_path,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f"analysis_{os.path.splitext(filename)[0]}.pdf"
+            )
+        else:
+            # If wkhtmltopdf is not installed, return HTML instead
+            response = make_response(html_content)
+            response.headers["Content-Type"] = "text/html"
+            response.headers["Content-Disposition"] = f"attachment; filename=analysis_{os.path.splitext(filename)[0]}.html"
+            return response
+    except Exception as e:
+        return jsonify({'error': f'PDF generation failed: {str(e)}'})
+    finally:
+        # Clean up the temporary file if it was created
+        @after_this_request
+        def remove_file(response):
+            try:
+                temp_pdf_path = os.path.join(tempfile.gettempdir(), f"analysis_{uuid.uuid4().hex}.pdf")
+                if os.path.exists(temp_pdf_path):
+                    os.remove(temp_pdf_path)
+            except Exception as e:
+                app.logger.error(f"Error removing temporary file: {e}")
+            return response
 
 @app.route('/analyze_files', methods=['POST'])
 def analyze_files():
@@ -927,6 +1086,385 @@ def extract_author_names(text):
         author_names.add(match)
     
     return author_names
+
+def generate_analysis_html(analysis_data, original_text, filename):
+    """Generate a formatted HTML document with analysis results"""
+    # Get current date and time
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Extract data from analysis
+    sentence_analysis = analysis_data.get('sentence_analysis', [])
+    citation_count = analysis_data.get('citation_count', 0)
+    rhetorical_move_stats = analysis_data.get('rhetorical_move_stats', {})
+    
+    # Start building HTML content
+    html = f'''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Citation Analysis Report - {filename}</title>
+        <style>
+            :root {{
+                --primary-color: #2c536e;
+                --secondary-color: #3c7ba8;
+                --accent-color: #e74c3c;
+                --background-color: #f5f5f5;
+                --card-color: #ffffff;
+                --text-color: #333333;
+                --border-radius: 8px;
+                --spacing: 20px;
+                --reporting-color: #4285f4;
+                --transforming-color: #34a853;
+                --evaluating-color: #ea4335;
+            }}
+            
+            body {{
+                font-family: 'Arial', sans-serif;
+                background-color: var(--background-color);
+                margin: 0;
+                padding: 0;
+                color: var(--text-color);
+                line-height: 1.6;
+            }}
+            
+            .container {{
+                max-width: 1100px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            
+            .header {{
+                background-color: var(--primary-color);
+                color: white;
+                padding: 20px;
+                margin-bottom: 30px;
+                border-radius: var(--border-radius);
+            }}
+            
+            .header h1 {{
+                margin: 0;
+                font-size: 24px;
+            }}
+            
+            .header p {{
+                margin: 5px 0 0;
+                opacity: 0.8;
+            }}
+            
+            .summary-box {{
+                background-color: #f8f9fa;
+                border-left: 4px solid var(--secondary-color);
+                padding: 15px;
+                margin-bottom: 30px;
+                border-radius: var(--border-radius);
+            }}
+            
+            .stats-container {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+                margin-bottom: 30px;
+            }}
+            
+            .stats-card {{
+                background-color: white;
+                border-radius: var(--border-radius);
+                padding: 15px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                flex: 1;
+                min-width: 200px;
+                text-align: center;
+            }}
+            
+            .stats-card h3 {{
+                margin-top: 0;
+                color: var(--primary-color);
+            }}
+            
+            .stats-card .number {{
+                font-size: 36px;
+                font-weight: bold;
+                margin: 10px 0;
+            }}
+            
+            .stats-card .percentage {{
+                font-size: 18px;
+                color: #666;
+            }}
+            
+            .chart-container {{
+                display: flex;
+                justify-content: space-around;
+                height: 250px;
+                margin: 30px 0;
+                align-items: flex-end;
+            }}
+            
+            .chart-bar {{
+                width: 80px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }}
+            
+            .chart-fill {{
+                width: 100%;
+                background-color: var(--primary-color);
+                border-radius: 4px 4px 0 0;
+                min-height: 10px;
+            }}
+            
+            .chart-label {{
+                margin-top: 10px;
+                text-align: center;
+                font-weight: bold;
+            }}
+            
+            .chart-value {{
+                margin-bottom: 5px;
+                font-weight: bold;
+            }}
+            
+            .result-card {{
+                background-color: white;
+                border-radius: var(--border-radius);
+                padding: 20px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                border-left: 4px solid #ccc;
+            }}
+            
+            .result-card.reporting-move {{
+                border-left-color: var(--reporting-color);
+            }}
+            
+            .result-card.transforming-move {{
+                border-left-color: var(--transforming-color);
+            }}
+            
+            .result-card.evaluating-move {{
+                border-left-color: var(--evaluating-color);
+            }}
+            
+            .result-card.has-citation {{
+                border-left-width: 6px;
+            }}
+            
+            .move-badge {{
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: bold;
+                color: white;
+                margin-right: 10px;
+            }}
+            
+            .reporting-badge {{
+                background-color: var(--reporting-color);
+            }}
+            
+            .transforming-badge {{
+                background-color: var(--transforming-color);
+            }}
+            
+            .evaluating-badge {{
+                background-color: var(--evaluating-color);
+            }}
+            
+            .citation-info {{
+                background-color: #f8f9fa;
+                border-radius: var(--border-radius);
+            }}
+            
+            .confidence-bar {{
+                height: 10px;
+                background-color: var(--secondary-color);
+                border-radius: 5px;
+                margin-top: 5px;
+            }}
+            
+            .original-text {{
+                background-color: white;
+                border-radius: var(--border-radius);
+                padding: 20px;
+                margin-top: 30px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                white-space: pre-wrap;
+                font-family: 'Georgia', serif;
+                line-height: 1.8;
+            }}
+            
+            h2 {{
+                color: var(--primary-color);
+                margin-top: 40px;
+                margin-bottom: 20px;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 10px;
+            }}
+            
+            @media print {{
+                body {{
+                    background-color: white;
+                }}
+                
+                .container {{
+                    width: 100%;
+                    max-width: none;
+                }}
+                
+                .result-card, .stats-card, .summary-box, .original-text {{
+                    break-inside: avoid;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Citation Analysis Report</h1>
+                <p>Filename: {filename}</p>
+                <p>Generated on: {current_time}</p>
+            </div>
+            
+            <div class="summary-box">
+                <h2>Analysis Summary</h2>
+                <p><strong>Total Citations Found:</strong> {citation_count}</p>
+            </div>
+    '''
+    
+    # Add rhetorical move statistics
+    if rhetorical_move_stats:
+        move_counts = rhetorical_move_stats.get('counts', {})
+        move_percentages = rhetorical_move_stats.get('percentages', {})
+        
+        html += f'''
+            <h2>Rhetorical Move Statistics</h2>
+            <div class="stats-container">
+                <div class="stats-card">
+                    <h3>Citations</h3>
+                    <div class="number">{citation_count}</div>
+                    <div class="percentage">Total</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Reporting</h3>
+                    <div class="number">{move_counts.get('Reporting', 0)}</div>
+                    <div class="percentage">{move_percentages.get('Reporting', 0)}%</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Transforming</h3>
+                    <div class="number">{move_counts.get('Transforming', 0)}</div>
+                    <div class="percentage">{move_percentages.get('Transforming', 0)}%</div>
+                </div>
+                <div class="stats-card">
+                    <h3>Evaluating</h3>
+                    <div class="number">{move_counts.get('Evaluating', 0)}</div>
+                    <div class="percentage">{move_percentages.get('Evaluating', 0)}%</div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-bar">
+                    <div class="chart-value">{move_percentages.get('Reporting', 0)}%</div>
+                    <div class="chart-fill" style="height: {max(move_percentages.get('Reporting', 0), 5)}%; background-color: var(--reporting-color);"></div>
+                    <div class="chart-label">Reporting</div>
+                </div>
+                <div class="chart-bar">
+                    <div class="chart-value">{move_percentages.get('Transforming', 0)}%</div>
+                    <div class="chart-fill" style="height: {max(move_percentages.get('Transforming', 0), 5)}%; background-color: var(--transforming-color);"></div>
+                    <div class="chart-label">Transforming</div>
+                </div>
+                <div class="chart-bar">
+                    <div class="chart-value">{move_percentages.get('Evaluating', 0)}%</div>
+                    <div class="chart-fill" style="height: {max(move_percentages.get('Evaluating', 0), 5)}%; background-color: var(--evaluating-color);"></div>
+                    <div class="chart-label">Evaluating</div>
+                </div>
+            </div>
+        '''
+    
+    # Add sentence analysis
+    html += '''
+        <h2>Sentence Analysis</h2>
+    '''
+    
+    for result in sentence_analysis:
+        # Determine rhetorical move class
+        move_class = ''
+        move_badge = ''
+        rhetorical_move = result.get('rhetorical_move', '')
+        
+        if rhetorical_move == 'Reporting':
+            move_class = 'reporting-move'
+            move_badge = '<span class="move-badge reporting-badge">Reporting</span>'
+        elif rhetorical_move == 'Transforming':
+            move_class = 'transforming-move'
+            move_badge = '<span class="move-badge transforming-badge">Transforming</span>'
+        elif rhetorical_move == 'Evaluating':
+            move_class = 'evaluating-move'
+            move_badge = '<span class="move-badge evaluating-badge">Evaluating</span>'
+        
+        has_citation = result.get('has_citation', False)
+        citation_class = 'has-citation' if has_citation else 'no-citation'
+        
+        # Citation info
+        citation_info = ''
+        if has_citation and 'citations' in result and result['citations']:
+            citation_info = f'''
+                <div class="citation-info" style="padding: 15px; margin-top: 15px;">
+                    <p style="margin-bottom: 10px;"><strong>Citations ({len(result['citations'])}):</strong></p>
+                    <p style="margin-bottom: 0;">{', '.join(result['citations'])}</p>
+                </div>
+            '''
+        
+        # Confidence bar
+        confidence = result.get('confidence', 0)
+        confidence_percentage = round(confidence * 100, 1)
+        confidence_color = '#4285f4' if confidence_percentage > 80 else '#ffc107' if confidence_percentage > 50 else '#ea4335'
+        
+        html += f'''
+            <div class="result-card {move_class} {citation_class}">
+                <div style="margin-bottom: 15px;">
+                    <h3 style="margin-top: 0; margin-bottom: 10px;">Sentence</h3>
+                    <p style="margin-bottom: 0;">{result.get('sentence', '')}</p>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <h3 style="margin-top: 0; margin-bottom: 10px;">Rhetorical Move</h3>
+                    <div>{move_badge} {rhetorical_move}</div>
+                </div>
+                {citation_info}
+                <div style="margin-top: 15px;">
+                    <h3 style="margin-top: 0; margin-bottom: 10px;">Citation Style</h3>
+                    <p style="margin-bottom: 0;">{result.get('citation_style', 'None detected')}</p>
+                </div>
+                <div style="margin-top: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span>Confidence</span>
+                        <span style="font-weight: bold;">{confidence_percentage}%</span>
+                    </div>
+                    <div class="confidence-bar" style="width: {confidence_percentage}%; background-color: {confidence_color};"></div>
+                </div>
+            </div>
+        '''
+    
+    # Add original text
+    html += f'''
+        <h2>Original Text</h2>
+        <div class="original-text">
+            {original_text}
+        </div>
+    '''
+    
+    # Close HTML
+    html += '''
+        </div>
+    </body>
+    </html>
+    '''
+    
+    return html
+
 
 def process_text(text):
     

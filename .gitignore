@@ -57,3 +57,63 @@ ENV/
 # Logs
 logs/
 *.log
+
+# Exclude training/testing files and models
+*_models/
+*_coded_*/
+bert_comparison_results/
+hierarchical*
+new classifier training and testing/
+augmented_models/
+qwen_coded_*/
+retrained_*
+sentence_qwen_models/
+tfidf_coded_*/
+window_*
+real_qwen3_models/
+
+# Exclude training scripts
+*_comparison.py
+*_detailed_metrics.py
+*_labeler.py
+bert_*.py
+compare_*.py
+comprehensive_*.py
+continue_*.py
+create_*.py
+ensemble_classifier.py
+evaluate_*.py
+finetune_*.py
+generate_*.py
+hierarchical_*.py
+qwen_*.py
+real_qwen3_classifier.py
+retrain_*.py
+run_*.py
+scibert_detailed_metrics.py
+scibert_labeler.py
+sentence_qwen_classifier.py
+test_*.py
+tfidf_*.py
+traditional_*.py
+train_*.py
+view_*.py
+window_*.py
+
+# Exclude confusion matrices and plots
+*.png
+confusion_matrix.*
+
+# Exclude database files
+*.duckdb
+
+# Exclude README files for training
+*README*.md
+!README.md
+
+# Exclude additional app versions
+app_*.py
+!app.py
+
+# Exclude additional template files
+templates/upload_and_analyze.html

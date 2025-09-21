@@ -8,3 +8,5 @@ PyPDF2==1.26.0
 python-docx==0.8.11
 joblib==1.0.1
 gunicorn==20.1.0
+transformers==4.53.3
+torch==2.7.1

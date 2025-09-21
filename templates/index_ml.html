@@ -306,11 +306,21 @@
         <div class="row">
             <div class="col-md-5">
                 <div class="input-card">
-                    <h3 class="section-title">Enter your text</h3>
-                    <div class="form-group">
-                        <textarea class="form-control" id="textInput" rows="18" placeholder="Paste your text here..."></textarea>
+                    <h3 class="section-title">Text Input</h3>
+                    <div class="mb-4">
+                        <textarea class="form-control" id="textInput" rows="15" placeholder="Paste your text here..."></textarea>
                     </div>
-                    <button class="btn btn-primary mt-5 py-3 px-5" onclick="analyzeText()">
+                    <div class="mb-4">
+                        <h4 class="mb-3">Or Upload a Document</h4>
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="fileInput" accept=".txt,.docx,.pdf">
+                            <button class="btn btn-outline-primary" type="button" id="uploadButton">
+                                <i class="fas fa-upload me-2"></i> Upload
+                            </button>
+                        </div>
+                        <div class="form-text">Supported formats: TXT, DOCX, PDF</div>
+                    </div>
+                    <button class="btn btn-primary mt-3 py-3 px-5" onclick="analyzeText()">
                         <i class="fas fa-search me-2"></i> Analyze Text
                     </button>
                 </div>
@@ -324,6 +334,48 @@
     </div>
 
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up file upload button
+            const fileInput = document.getElementById('fileInput');
+            const uploadButton = document.getElementById('uploadButton');
+            const textInput = document.getElementById('textInput');
+            
+            uploadButton.addEventListener('click', function() {
+                if (!fileInput.files.length) {
+                    alert('Please select a file first');
+                    return;
+                }
+                
+                const file = fileInput.files[0];
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Show loading indicator
+                textInput.value = 'Loading file content...';
+                textInput.disabled = true;
+                
+                fetch('/upload_file', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                        textInput.value = '';
+                    } else {
+                        textInput.value = data.text;
+                    }
+                    textInput.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error uploading file: ' + error.message);
+                    textInput.disabled = false;
+                });
+            });
+        });
+        
         function analyzeText() {
             const text = document.getElementById('textInput').value;
             if (!text.trim()) {
